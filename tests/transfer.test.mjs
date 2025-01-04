@@ -1,4 +1,4 @@
-import { handle, startMemory, transfer } from './helpers.mjs';
+import { handle, startMemory } from './helpers.mjs';
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
@@ -78,9 +78,9 @@ describe('Transfers', async () => {
     const eth1 = '0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa';
     const eth2 = '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB';
 
-    await checkTransfer(arweave1, arweave2, 100000000);
-    await checkTransfer(eth1, arweave2, 100000000);
-    endingMemory = await checkTransfer(eth2, eth1, 100000000);
+    await checkTransfer(arweave1, arweave2, 100);
+    await checkTransfer(eth1, arweave2, 100);
+    endingMemory = await checkTransfer(eth2, eth1, 100);
   });
 
   it('should not transfer tokens to another wallet if the sender does not have enough tokens', async () => {

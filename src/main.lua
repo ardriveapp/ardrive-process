@@ -10,9 +10,7 @@ Denomination = 6
 Owner = Owner or ao.env.Process.Owner
 Balances = Balances or {}
 if not Balances[Owner] then -- initialize the balance for the process id
-	Balances = {
-		[Owner] = constants.totalTokenSupply, -- 10M ARDRIVE
-	}
+	Balances[Owner] = constants.totalTokenSupply -- 10M ARDRIVE
 end
 LastKnownMessageTimestamp = LastKnownMessageTimestamp or 0
 LastKnownMessageId = LastKnownMessageId or ""

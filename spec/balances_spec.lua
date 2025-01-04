@@ -1,5 +1,6 @@
 local balances = require("balances")
 
+local ownerAddress = "test-this-is-valid-arweave-wallet-address-0"
 local testAddress1 = "test-this-is-valid-arweave-wallet-address-1"
 local testAddress2 = "test-this-is-valid-arweave-wallet-address-2"
 local testAddressEth = "0xFCAd0B19bB29D4674531d6f115237E16AfCE377c"
@@ -8,12 +9,20 @@ local unsafeAddress = "not-a-real-address"
 describe("balances", function()
 	before_each(function()
 		_G.Balances = {
+			[ownerAddress] = 100,
 			[testAddress1] = 100,
 		}
 	end)
 
 	it("should return the balance with getBalance", function()
 		assert.are.equal(100, balances.getBalance(testAddress1))
+	end)
+
+	it("should return all balances with getBalances", function()
+		assert.are.same({
+			["test-this-is-valid-arweave-wallet-address-0"] = 100,
+			["test-this-is-valid-arweave-wallet-address-1"] = 100,
+		}, balances.getBalances())
 	end)
 
 	it("should transfer tokens", function()
@@ -95,8 +104,12 @@ describe("balances", function()
 				sortBy = "balance",
 				sortOrder = "desc",
 				hasMore = false,
-				totalItems = 1,
+				totalItems = 2,
 				items = {
+					{
+						address = ownerAddress,
+						balance = 100,
+					},
 					{
 						address = testAddress1,
 						balance = 100,
