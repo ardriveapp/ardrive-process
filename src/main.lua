@@ -1,5 +1,6 @@
 -- Adjust package.path to include the current directory
 local token = require("token")
+local constants = require("constants")
 local ARDRIVEEvent = require("ardrive_event")
 
 Name = Name or "Testnet ARDRIVE"
@@ -8,6 +9,11 @@ Logo = Logo or "qUjrTmHdVjXX4D6rU6Fik02bUOzWkOR6oOqUg39g4-s"
 Denomination = 6
 Owner = Owner or ao.env.Process.Owner
 Balances = Balances or {}
+if not Balances[Owner] then -- initialize the balance for the process id
+	Balances = {
+		[Owner] = constants.totalTokenSupply, -- 10M ARDRIVE
+	}
+end
 LastKnownMessageTimestamp = LastKnownMessageTimestamp or 0
 LastKnownMessageId = LastKnownMessageId or ""
 
@@ -203,11 +209,13 @@ addEventingHandler(ActionMap.Mint, utils.hasMatchingTag("Action", ActionMap.Mint
 
 	msg.ioEvent:addField("RecipientFormatted", recipient)
 
-	local result = balances.mint(recipient, msg.From, quantity, allowUnsafeAddresses)
+	local result = balances.mint(recipient, quantity, allowUnsafeAddresses)
 	if result ~= nil then
 		local recipientNewBalance = result[recipient]
 		msg.ioEvent:addField("Mint-Recipient-Previous-Balance", recipientNewBalance - quantity)
 		msg.ioEvent:addField("Mint-Recipient-New-Balance", recipientNewBalance)
+		local totalSupplyDetails = token.computeTotalSupply()
+		msg.ioEvent:addField("Last-Known-Total-Token-Supply", totalSupplyDetails.totalSupply)
 	end
 
 	-- Credit-Notice message template, that is sent to the Recipient of the transfer
@@ -245,6 +253,8 @@ addEventingHandler(ActionMap.Burn, utils.hasMatchingTag("Action", ActionMap.Burn
 		local burnerNewBalance = result[msg.From]
 		msg.ioEvent:addField("Burner-Previous-Balance", burnerNewBalance - quantity)
 		msg.ioEvent:addField("Burner-New-Balance", burnerNewBalance)
+		local totalSupplyDetails = token.computeTotalSupply()
+		msg.ioEvent:addField("Last-Known-Total-Token-Supply", totalSupplyDetails.totalSupply)
 	end
 
 	local burnNotice = {

@@ -1,4 +1,4 @@
-import { handle, startMemory } from './helpers.mjs';
+import { handle, startMemory, transfer } from './helpers.mjs';
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
@@ -78,7 +78,6 @@ describe('Transfers', async () => {
     const eth1 = '0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa';
     const eth2 = '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB';
 
-    console.log ("okay")
     await checkTransfer(arweave1, arweave2, 100000000);
     await checkTransfer(eth1, arweave2, 100000000);
     endingMemory = await checkTransfer(eth2, eth1, 100000000);
@@ -140,7 +139,7 @@ describe('Transfers', async () => {
           Tags: [
             { name: 'Action', value: 'Transfer' },
             { name: 'Recipient', value: recipient },
-            { name: 'Quantity', value: 100000000 }, // 100 ARIO
+            { name: 'Quantity', value: 100000000 }, // 100 ARDRIVE
             { name: 'Cast', value: true },
             { name: 'Allow-Unsafe-Addresses', value: allowUnsafeAddresses },
           ],
@@ -193,7 +192,7 @@ describe('Transfers', async () => {
         Tags: [
           { name: 'Action', value: 'Transfer' },
           { name: 'Recipient', value: recipient },
-          { name: 'Quantity', value: 100000000 }, // 100 ARIO
+          { name: 'Quantity', value: 100000000 }, // 100 ARDRIVE
           { name: 'Cast', value: true },
           { name: 'Allow-Unsafe-Addresses', value: true },
         ],

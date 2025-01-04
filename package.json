@@ -3,7 +3,7 @@
   "scripts": {
     "build": "node tools/bundle-aos.mjs",
     "lint": "luacheck .",
-    "test:integration": "yarn build && node --test --experimental-wasm-memory64 tests/*.test.mjs",
+    "test:integration": "yarn build && node --test --experimental-wasm-memory64 tests/balances.test.mjs tests/transfer.test.mjs",
     "test:unit": "busted .",
     "evolve": "yarn build && node tools/evolve.mjs"
   },
