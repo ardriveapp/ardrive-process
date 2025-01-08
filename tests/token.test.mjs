@@ -250,4 +250,47 @@ describe('Token Minting/Burning', async () => {
     endingMemory = burnResult.Memory
   });
 
+  it('should correctly update the total supply after minting and burning', async () => {
+    const mintResult = await handle({
+      options: {
+        From: PROCESS_OWNER,
+        Owner: PROCESS_OWNER,
+        Tags: [
+          { name: 'Action', value: 'Mint' },
+          { name: 'Recipient', value: STUB_ADDRESS },
+          { name: 'Quantity', value: 500 },
+          { name: 'Cast', value: false },
+        ],
+      },
+      mem: startMemory,
+    });
+  
+    const burnResult = await handle({
+      options: {
+        From: STUB_ADDRESS,
+        Owner: STUB_ADDRESS,
+        Tags: [
+          { name: 'Action', value: 'Burn' },
+          { name: 'Quantity', value: 100 },
+          { name: 'Cast', value: false },
+        ],
+      },
+      mem: mintResult.Memory,
+    });
+  
+    const totalSupply = await handle({
+      options: {
+        Tags: [{ name: 'Action', value: 'Total-Supply' }],
+      },
+      mem: burnResult.Memory,
+    });
+  
+    assert.equal(
+      JSON.parse(totalSupply.Messages[0].Data),
+      10000000000400, // Adjusted supply after minting and burning
+      'Total supply mismatch'
+    );
+  });
+  
+
 });
