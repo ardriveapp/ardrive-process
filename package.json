@@ -3,13 +3,16 @@
   "scripts": {
     "build": "node tools/bundle-aos.mjs",
     "lint": "luacheck .",
-    "test:integration": "yarn build && node --test --experimental-wasm-memory64 tests/balances.test.mjs tests/transfer.test.mjs",
+    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
+    "test:integration": "yarn build && node --test --experimental-wasm-memory64 tests/balances.test.mjs tests/transfer.test.mjs tests/token.test.mjs",
     "test:unit": "busted .",
     "evolve": "yarn build && node tools/evolve.mjs"
   },
   "devDependencies": {
     "@permaweb/ao-loader": "^0.0.35",
-    "@permaweb/aoconnect": "^0.0.55"
+    "@permaweb/aoconnect": "^0.0.55",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.2"
   },
   "lint-staged": {
     "*.lua": [

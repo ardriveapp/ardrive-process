@@ -25,7 +25,7 @@ describe('Transfers', async () => {
               { name: 'Action', value: 'Transfer' },
               { name: 'Recipient', value: sender },
               { name: 'Quantity', value: quantity },
-              { name: 'Cast', value: true },
+              { name: 'Cast', value: false },
             ],
           },
         });
@@ -39,7 +39,7 @@ describe('Transfers', async () => {
             { name: 'Target', value: sender },
           ],
         },
-        memory: mem,
+        mem
       });
       const senderBalanceData = JSON.parse(senderBalance.Messages[0].Data);
 
@@ -51,11 +51,13 @@ describe('Transfers', async () => {
             { name: 'Action', value: 'Transfer' },
             { name: 'Recipient', value: recipient },
             { name: 'Quantity', value: quantity }, // 100 ARIO
-            { name: 'Cast', value: true },
+            { name: 'Cast', value: false },
           ],
         },
-        memory: mem,
+        mem,
       });
+
+      mem = transferResult.Memory;
 
       // get balances
       const result = await handle({
@@ -64,7 +66,7 @@ describe('Transfers', async () => {
           Owner: sender,
           Tags: [{ name: 'Action', value: 'Balances' }],
         },
-        memory: transferResult.Memory,
+        mem,
       });
       const balances = JSON.parse(result.Messages[0].Data);
       assert.equal(balances[recipient], quantity);
@@ -112,7 +114,7 @@ describe('Transfers', async () => {
       options: {
         Tags: [{ name: 'Action', value: 'Balances' }],
       },
-      memory: transferResult.Memory,
+      mem: transferResult.Memory,
     });
     const balances = JSON.parse(result.Messages[0].Data);
     // the new balance won't be defined
@@ -204,7 +206,7 @@ describe('Transfers', async () => {
       options: {
         Tags: [{ name: 'Action', value: 'Balances' }],
       },
-      memory: transferResult.Memory,
+      mem: transferResult.Memory,
     });
     const balances = JSON.parse(result.Messages[0].Data);
     assert.equal(balances[recipient] || 0, 100000000);
@@ -248,4 +250,5 @@ describe('Transfers', async () => {
     assert.equal(balances[sender], senderBalanceData);
     endingMemory = result.Memory;
   });
+
 });
