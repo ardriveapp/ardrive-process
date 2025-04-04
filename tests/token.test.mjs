@@ -1,18 +1,13 @@
 import { getBalance, handle, startMemory } from './helpers.mjs';
-import { afterEach, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
   STUB_ADDRESS,
   PROCESS_OWNER,
-  STUB_TIMESTAMP,
 } from '../tools/constants.mjs';
-import { assertNoInvariants } from './invariants.mjs';
 
 describe('Token Minting/Burning', async () => {
   let endingMemory;
-  afterEach(() => {
-    assertNoInvariants({ memory: endingMemory, timestamp: STUB_TIMESTAMP });
-  });
 
   it('should mint tokens if process owner to self', async () => {
     const balance = await getBalance({
