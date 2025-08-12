@@ -5,7 +5,8 @@ import {
   AO_LOADER_OPTIONS,
   DEFAULT_HANDLE_OPTIONS,
   BUNDLED_SOURCE_CODE,
-  STUB_TIMESTAMP
+  STUB_TIMESTAMP,
+  PROCESS_OWNER
 } from '../tools/constants.mjs';
 import assert from 'node:assert';
 
@@ -136,4 +137,234 @@ export const transfer = async ({
   });
   assertNoResultError(transferResult);
   return transferResult.Memory;
+};
+
+export const createVault = async ({
+  memory = startMemory,
+  from = PROCESS_OWNER,
+  quantity,
+  lockLengthMs,
+  vaultId,
+  msgId,
+  timestamp = STUB_TIMESTAMP,
+  shouldAssertNoResultError = true,
+}) => {
+  const id = msgId || vaultId || DEFAULT_HANDLE_OPTIONS.Id;
+  const result = await handle({
+    options: {
+      From: from,
+      Owner: PROCESS_OWNER,
+      Tags: [
+        { name: 'Action', value: 'Create-Vault' },
+        { name: 'Quantity', value: String(quantity) },
+        { name: 'Lock-Length', value: String(lockLengthMs) },
+        { name: 'Vault-Id', value: id },
+      ],
+      Timestamp: timestamp,
+      Id: id,
+    },
+    mem: memory,
+  });
+  if (shouldAssertNoResultError) {
+    assertNoResultError(result);
+  }
+  return { result, memory: result.Memory };
+};
+
+export const createVaultedTransfer = async ({
+  memory = startMemory,
+  from = PROCESS_OWNER,
+  recipient,
+  quantity,
+  lockLengthMs,
+  vaultId,
+  msgId,
+  revokable = false,
+  allowUnsafeAddresses = false,
+  timestamp = STUB_TIMESTAMP,
+  shouldAssertNoResultError = true,
+}) => {
+  const id = msgId || vaultId || DEFAULT_HANDLE_OPTIONS.Id;
+  const result = await handle({
+    options: {
+      From: from,
+      Owner: PROCESS_OWNER,
+      Tags: [
+        { name: 'Action', value: 'Vaulted-Transfer' },
+        { name: 'Recipient', value: recipient },
+        { name: 'Quantity', value: String(quantity) },
+        { name: 'Lock-Length', value: String(lockLengthMs) },
+        { name: 'Vault-Id', value: id },
+        { name: 'Revokable', value: revokable ? 'true' : 'false' },
+        { name: 'Allow-Unsafe-Addresses', value: allowUnsafeAddresses ? 'true' : 'false' },
+      ],
+      Timestamp: timestamp,
+      Id: id,
+    },
+    mem: memory,
+  });
+  if (shouldAssertNoResultError) {
+    assertNoResultError(result);
+  }
+  return { result, memory: result.Memory };
+};
+
+export const getVault = async ({
+  memory = startMemory,
+  address,
+  vaultId,
+  timestamp = STUB_TIMESTAMP,
+  assertNoResultError: shouldAssertNoResultError = true,
+}) => {
+  const result = await handle({
+    options: {
+      Tags: [
+        { name: 'Action', value: 'Vault' },
+        { name: 'Address', value: address },
+        { name: 'Vault-Id', value: vaultId },
+      ],
+      Timestamp: timestamp,
+    },
+    mem: memory,
+  });
+  if (shouldAssertNoResultError) {
+    assertNoResultError(result);
+  }
+  // Check if vault exists
+  const data = result.Messages[0]?.Data;
+  if (data === 'Vault not found' || !data) {
+    return undefined;
+  }
+  return JSON.parse(data);
+};
+
+export const getVaults = async ({
+  memory = startMemory,
+  timestamp = STUB_TIMESTAMP,
+}) => {
+  const result = await handle({
+    options: {
+      Tags: [
+        { name: 'Action', value: 'Vaults' },
+      ],
+      Timestamp: timestamp,
+    },
+    mem: memory,
+  });
+  assertNoResultError(result);
+  return JSON.parse(result.Messages[0].Data);
+};
+
+export const getInfo = async ({
+  memory = startMemory,
+  timestamp = STUB_TIMESTAMP,
+}) => {
+  const result = await handle({
+    options: {
+      Tags: [
+        { name: 'Action', value: 'Info' },
+      ],
+      Timestamp: timestamp,
+    },
+    mem: memory,
+  });
+  assertNoResultError(result);
+  return { result, memory: result.Memory };
+};
+
+export const extendVault = async ({
+  memory = startMemory,
+  from = PROCESS_OWNER,
+  vaultId,
+  extendLengthMs,
+  timestamp = STUB_TIMESTAMP,
+}) => {
+  const result = await handle({
+    options: {
+      From: from,
+      Owner: PROCESS_OWNER,
+      Tags: [
+        { name: 'Action', value: 'Extend-Vault' },
+        { name: 'Vault-Id', value: vaultId },
+        { name: 'Extend-Length', value: String(extendLengthMs) },
+      ],
+      Timestamp: timestamp,
+    },
+    mem: memory,
+  });
+  assertNoResultError(result);
+  return { result, memory: result.Memory };
+};
+
+export const increaseVault = async ({
+  memory = startMemory,
+  from = PROCESS_OWNER,
+  vaultId,
+  quantity,
+  timestamp = STUB_TIMESTAMP,
+}) => {
+  const result = await handle({
+    options: {
+      From: from,
+      Owner: PROCESS_OWNER,
+      Tags: [
+        { name: 'Action', value: 'Increase-Vault' },
+        { name: 'Vault-Id', value: vaultId },
+        { name: 'Quantity', value: String(quantity) },
+      ],
+      Timestamp: timestamp,
+    },
+    mem: memory,
+  });
+  assertNoResultError(result);
+  return { result, memory: result.Memory };
+};
+
+export const revokeVault = async ({
+  memory = startMemory,
+  from = PROCESS_OWNER,
+  recipient,
+  vaultId,
+  timestamp = STUB_TIMESTAMP,
+}) => {
+  const result = await handle({
+    options: {
+      From: from,
+      Owner: PROCESS_OWNER,
+      Tags: [
+        { name: 'Action', value: 'Revoke-Vault' },
+        { name: 'Recipient', value: recipient },
+        { name: 'Vault-Id', value: vaultId },
+      ],
+      Timestamp: timestamp,
+    },
+    mem: memory,
+  });
+  assertNoResultError(result);
+  return { result, memory: result.Memory };
+};
+
+export const getPaginatedVaults = async ({
+  memory = startMemory,
+  cursor,
+  limit,
+  sortBy,
+  sortOrder,
+  timestamp = STUB_TIMESTAMP,
+}) => {
+  const tags = [{ name: 'Action', value: 'Paginated-Vaults' }];
+  if (cursor) tags.push({ name: 'Cursor', value: cursor });
+  if (limit) tags.push({ name: 'Limit', value: String(limit) });
+  if (sortBy) tags.push({ name: 'Sort-By', value: sortBy });
+  if (sortOrder) tags.push({ name: 'Sort-Order', value: sortOrder });
+
+  const result = await handle({
+    options: {
+      Tags: tags,
+      Timestamp: timestamp,
+    },
+    mem: memory,
+  });
+  assertNoResultError(result);
+  return JSON.parse(result.Messages[0].Data);
 };

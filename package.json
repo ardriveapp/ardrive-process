@@ -4,7 +4,7 @@
     "build": "node tools/bundle-aos.mjs",
     "lint": "luacheck .",
     "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
-    "test:integration": "npm run build && node --test --experimental-wasm-memory64 tests/balances.test.mjs tests/transfer.test.mjs tests/token.test.mjs",
+    "test:integration": "npm run build && node --test --experimental-wasm-memory64 tests/balances.test.mjs tests/transfer.test.mjs tests/token.test.mjs tests/vaults.test.mjs",
     "test:unit": "busted .",
     "evolve": "npm run build && node tools/evolve.mjs"
   },

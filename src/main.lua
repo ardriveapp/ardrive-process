@@ -15,10 +15,17 @@ end
 LastKnownMessageTimestamp = LastKnownMessageTimestamp or 0
 LastKnownMessageId = LastKnownMessageId or ""
 
+-- Vaulting state variables
+Vaults = Vaults or {}
+NextBalanceVaultsPruneTimestamp = NextBalanceVaultsPruneTimestamp or nil
+LastKnownLockedSupply = LastKnownLockedSupply or 0
+LastKnownCirculatingSupply = LastKnownCirculatingSupply or constants.totalTokenSupply
+
 local utils = require("utils")
 local json = require("json")
 local ao = ao or require("ao")
 local balances = require("balances")
+local vaults = require("vaults")
 
 -- handlers that are critical should discard the memory on error (see prune for an example)
 local CRITICAL = true
@@ -32,6 +39,15 @@ local ActionMap = {
 	PaginatedBalances = "Paginated-Balances",
 	Mint = "Mint",
 	Burn = "Burn",
+	-- Vault actions
+	CreateVault = "Create-Vault",
+	VaultedTransfer = "Vaulted-Transfer",
+	ExtendVault = "Extend-Vault",
+	IncreaseVault = "Increase-Vault",
+	RevokeVault = "Revoke-Vault",
+	Vaults = "Vaults",
+	Vault = "Vault",
+	PaginatedVaults = "Paginated-Vaults",
 }
 
 --- @param msg ParsedMessage
@@ -133,6 +149,24 @@ end, function(msg)
 	assertAndSanitizeInputs(msg)
 	updateLastKnownMessage(msg)
 end, CRITICAL, false)
+
+-- Prune handler that runs on every message to unlock expired vaults
+addEventingHandler("prune", function()
+	return "continue" -- Run on every message
+end, function(msg)
+	local prunedVaults = vaults.pruneVaults(msg.Timestamp)
+	local prunedVaultsCount = utils.lengthOfTable(prunedVaults or {})
+	if prunedVaultsCount > 0 then
+		msg.ioEvent:addField("Pruned-Vaults", prunedVaults)
+		msg.ioEvent:addField("Pruned-Vaults-Count", prunedVaultsCount)
+		for _, vault in pairs(prunedVaults) do
+			LastKnownLockedSupply = LastKnownLockedSupply - vault.balance
+			LastKnownCirculatingSupply = LastKnownCirculatingSupply + vault.balance
+		end
+		msg.ioEvent:addField("Last-Known-Locked-Supply", LastKnownLockedSupply)
+		msg.ioEvent:addField("Last-Known-Circulating-Supply", LastKnownCirculatingSupply)
+	end
+end, false, false)
 
 addEventingHandler(ActionMap.Transfer, utils.hasMatchingTag("Action", ActionMap.Transfer), function(msg)
 	-- assert recipient is a valid arweave address
@@ -345,6 +379,225 @@ addEventingHandler("paginatedBalances", utils.hasMatchingTag("Action", "Paginate
 	local walletBalances =
 		balances.getPaginatedBalances(page.cursor, page.limit, page.sortBy or "balance", page.sortOrder)
 	Send(msg, { Target = msg.From, Action = "Balances-Notice", Data = json.encode(walletBalances) })
+end)
+
+-- Vault Handlers
+addEventingHandler(ActionMap.CreateVault, utils.hasMatchingTag("Action", ActionMap.CreateVault), function(msg)
+	local quantity = msg.Tags.Quantity
+	local lockLengthMs = msg.Tags["Lock-Length"]
+	local vaultId = msg.Tags["Vault-Id"] or msg.Id
+	
+	assert(
+		quantity and utils.isInteger(quantity) and quantity >= constants.MIN_VAULT_SIZE,
+		"Invalid quantity. Must be integer greater than or equal to " .. constants.MIN_VAULT_SIZE .. " mARDRIVE"
+	)
+	assert(lockLengthMs and tonumber(lockLengthMs), "Lock-Length is required")
+	
+	local result = vaults.createVault(msg.From, quantity, tonumber(lockLengthMs), msg.Timestamp, vaultId)
+	
+	msg.ioEvent:addField("Vault-Id", vaultId)
+	msg.ioEvent:addField("Vault-Balance", result.balance)
+	msg.ioEvent:addField("Vault-Start-Timestamp", result.startTimestamp)
+	msg.ioEvent:addField("Vault-End-Timestamp", result.endTimestamp)
+	
+	LastKnownLockedSupply = LastKnownLockedSupply + quantity
+	LastKnownCirculatingSupply = LastKnownCirculatingSupply - quantity
+	msg.ioEvent:addField("Last-Known-Locked-Supply", LastKnownLockedSupply)
+	msg.ioEvent:addField("Last-Known-Circulating-Supply", LastKnownCirculatingSupply)
+	
+	Send(msg, {
+		Target = msg.From,
+		Action = "Create-Vault-Notice",
+		["Vault-Id"] = vaultId,
+		Quantity = tostring(quantity),
+		["Lock-Length"] = tostring(lockLengthMs),
+		Data = json.encode(result),
+	})
+end)
+
+addEventingHandler(ActionMap.VaultedTransfer, utils.hasMatchingTag("Action", ActionMap.VaultedTransfer), function(msg)
+	local recipient = msg.Tags.Recipient
+	local quantity = msg.Tags.Quantity
+	local lockLengthMs = msg.Tags["Lock-Length"]
+	local vaultId = msg.Tags["Vault-Id"] or msg.Id
+	local allowUnsafeAddresses = msg.Tags["Allow-Unsafe-Addresses"] or false
+	local revokable = msg.Tags.Revokable and msg.Tags.Revokable == "true"
+	
+	assert(utils.isValidAddress(recipient, allowUnsafeAddresses), "Invalid recipient")
+	assert(
+		quantity and utils.isInteger(quantity) and quantity >= constants.MIN_VAULT_SIZE,
+		"Invalid quantity. Must be integer greater than or equal to " .. constants.MIN_VAULT_SIZE .. " mARDRIVE"
+	)
+	assert(lockLengthMs and tonumber(lockLengthMs), "Lock-Length is required")
+	
+	local result = vaults.vaultedTransfer(
+		msg.From,
+		recipient,
+		quantity,
+		tonumber(lockLengthMs),
+		msg.Timestamp,
+		vaultId,
+		allowUnsafeAddresses,
+		revokable
+	)
+	
+	msg.ioEvent:addField("Vault-Id", vaultId)
+	msg.ioEvent:addField("Vault-Recipient", recipient)
+	msg.ioEvent:addField("Vault-Controller", result.controller or "")
+	msg.ioEvent:addField("Vault-Balance", result.balance)
+	msg.ioEvent:addField("Vault-Start-Timestamp", result.startTimestamp)
+	msg.ioEvent:addField("Vault-End-Timestamp", result.endTimestamp)
+	
+	LastKnownLockedSupply = LastKnownLockedSupply + quantity
+	LastKnownCirculatingSupply = LastKnownCirculatingSupply - quantity
+	msg.ioEvent:addField("Last-Known-Locked-Supply", LastKnownLockedSupply)
+	msg.ioEvent:addField("Last-Known-Circulating-Supply", LastKnownCirculatingSupply)
+	
+	-- Send notices
+	Send(msg, {
+		Target = msg.From,
+		Action = "Debit-Notice",
+		Recipient = recipient,
+		Quantity = tostring(quantity),
+		["Vault-Id"] = vaultId,
+		Data = "You vaulted " .. tostring(quantity) .. " to " .. recipient,
+	})
+	
+	Send(msg, {
+		Target = recipient,
+		Action = "Create-Vault-Notice",
+		Sender = msg.From,
+		Quantity = tostring(quantity),
+		["Vault-Id"] = vaultId,
+		Revokable = tostring(revokable),
+		Data = json.encode(result),
+	})
+end)
+
+addEventingHandler(ActionMap.ExtendVault, utils.hasMatchingTag("Action", ActionMap.ExtendVault), function(msg)
+	local vaultId = msg.Tags["Vault-Id"]
+	local extendLengthMs = msg.Tags["Extend-Length"]
+	
+	assert(vaultId, "Vault-Id is required")
+	assert(extendLengthMs and tonumber(extendLengthMs), "Extend-Length is required")
+	
+	local result = vaults.extendVault(msg.From, tonumber(extendLengthMs), msg.Timestamp, vaultId)
+	
+	msg.ioEvent:addField("Vault-Id", vaultId)
+	msg.ioEvent:addField("New-End-Timestamp", result.endTimestamp)
+	
+	Send(msg, {
+		Target = msg.From,
+		Action = "Extend-Vault-Notice",
+		["Vault-Id"] = vaultId,
+		["New-End-Timestamp"] = tostring(result.endTimestamp),
+		Data = json.encode(result),
+	})
+end)
+
+addEventingHandler(ActionMap.IncreaseVault, utils.hasMatchingTag("Action", ActionMap.IncreaseVault), function(msg)
+	local vaultId = msg.Tags["Vault-Id"]
+	local quantity = msg.Tags.Quantity
+	
+	assert(vaultId, "Vault-Id is required")
+	assert(quantity > 0 and utils.isInteger(quantity), "Invalid quantity. Must be integer greater than 0")
+	
+	local result = vaults.increaseVault(msg.From, quantity, vaultId, msg.Timestamp)
+	
+	msg.ioEvent:addField("Vault-Id", vaultId)
+	msg.ioEvent:addField("New-Vault-Balance", result.balance)
+	
+	LastKnownLockedSupply = LastKnownLockedSupply + quantity
+	LastKnownCirculatingSupply = LastKnownCirculatingSupply - quantity
+	msg.ioEvent:addField("Last-Known-Locked-Supply", LastKnownLockedSupply)
+	msg.ioEvent:addField("Last-Known-Circulating-Supply", LastKnownCirculatingSupply)
+	
+	Send(msg, {
+		Target = msg.From,
+		Action = "Increase-Vault-Notice",
+		["Vault-Id"] = vaultId,
+		Quantity = tostring(quantity),
+		["New-Balance"] = tostring(result.balance),
+		Data = json.encode(result),
+	})
+end)
+
+addEventingHandler(ActionMap.RevokeVault, utils.hasMatchingTag("Action", ActionMap.RevokeVault), function(msg)
+	local vaultId = msg.Tags["Vault-Id"]
+	local recipient = msg.Tags.Recipient
+	
+	assert(vaultId, "Vault-Id is required")
+	assert(recipient, "Recipient is required")
+	
+	local result = vaults.revokeVault(msg.From, recipient, vaultId, msg.Timestamp)
+	
+	msg.ioEvent:addField("Vault-Id", vaultId)
+	msg.ioEvent:addField("Vault-Recipient", recipient)
+	msg.ioEvent:addField("Vault-Balance", result.balance)
+	
+	LastKnownLockedSupply = LastKnownLockedSupply - result.balance
+	LastKnownCirculatingSupply = LastKnownCirculatingSupply + result.balance
+	msg.ioEvent:addField("Last-Known-Locked-Supply", LastKnownLockedSupply)
+	msg.ioEvent:addField("Last-Known-Circulating-Supply", LastKnownCirculatingSupply)
+	
+	-- Send notices
+	Send(msg, {
+		Target = msg.From,
+		Action = "Credit-Notice",
+		Sender = recipient,
+		Quantity = tostring(result.balance),
+		["Vault-Id"] = vaultId,
+		Data = "Vault revoked. " .. tostring(result.balance) .. " returned",
+	})
+	
+	Send(msg, {
+		Target = recipient,
+		Action = "Revoke-Vault-Notice",
+		Controller = msg.From,
+		["Vault-Id"] = vaultId,
+		Data = json.encode(result),
+	})
+end)
+
+addEventingHandler(ActionMap.Vaults, utils.hasMatchingTag("Action", ActionMap.Vaults), function(msg)
+	local allVaults = vaults.getVaults()
+	Send(msg, {
+		Target = msg.From,
+		Action = "Vaults-Notice",
+		Data = json.encode(allVaults),
+	})
+end)
+
+addEventingHandler(ActionMap.Vault, utils.hasMatchingTag("Action", ActionMap.Vault), function(msg)
+	local target = msg.Tags.Target or msg.Tags.Address or msg.From
+	local vaultId = msg.Tags["Vault-Id"]
+	
+	assert(vaultId, "Vault-Id is required")
+	
+	local vault = vaults.getVault(target, vaultId)
+	
+	Send(msg, {
+		Target = msg.From,
+		Action = "Vault-Notice",
+		Address = target,
+		["Vault-Id"] = vaultId,
+		Data = vault and json.encode(vault) or "Vault not found",
+	})
+end)
+
+addEventingHandler(ActionMap.PaginatedVaults, utils.hasMatchingTag("Action", ActionMap.PaginatedVaults), function(msg)
+	local page = utils.parsePaginationTags(msg)
+	local paginatedVaults = vaults.getPaginatedVaults(
+		page.cursor,
+		page.limit,
+		page.sortOrder,
+		page.sortBy
+	)
+	Send(msg, {
+		Target = msg.From,
+		Action = "Paginated-Vaults-Notice",
+		Data = json.encode(paginatedVaults),
+	})
 end)
 
 Handlers.add("test", function()
