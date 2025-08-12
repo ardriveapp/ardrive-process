@@ -5,7 +5,7 @@ local ARDRIVEEvent = require("ardrive_event")
 
 Name = Name or "Testnet ARDRIVE"
 Ticker = Ticker or "tARDRIVE"
-Logo = Logo or "qUjrTmHdVjXX4D6rU6Fik02bUOzWkOR6oOqUg39g4-s"
+Logo = Logo or "KKmRbIfrc7wiLcG0zvY1etlO0NBx1926dSCksxCIN3A"
 Denomination = 6
 Owner = Owner or ao.env.Process.Owner
 Balances = Balances or {}
