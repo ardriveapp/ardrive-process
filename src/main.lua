@@ -2,6 +2,7 @@
 local token = require("token")
 local constants = require("constants")
 local ARDRIVEEvent = require("ardrive_event")
+local tips = require("tips")
 
 Name = Name or "Testnet ARDRIVE"
 Ticker = Ticker or "tARDRIVE"
@@ -34,6 +35,7 @@ local ActionMap = {
 	Info = "Info",
 	TotalSupply = "Total-Supply",
 	Transfer = "Transfer",
+	TransferWithTip = "Transfer-With-Tip",
 	Balance = "Balance",
 	Balances = "Balances",
 	PaginatedBalances = "Paginated-Balances",
@@ -228,6 +230,107 @@ addEventingHandler(ActionMap.Transfer, utils.hasMatchingTag("Action", ActionMap.
 		-- Send Debit-Notice and Credit-Notice
 		Send(msg, debitNotice)
 		Send(msg, creditNotice)
+	end
+end)
+
+addEventingHandler(ActionMap.TransferWithTip, utils.hasMatchingTag("Action", ActionMap.TransferWithTip), function(msg)
+	local recipient = msg.Tags.Recipient
+	local quantity = tonumber(msg.Tags.Quantity)
+	local tipAmount = msg.Tags["Tip-Amount"]
+	local allowUnsafeAddresses = msg.Tags["Allow-Unsafe-Addresses"] or false
+	
+	-- Validate inputs
+	assert(utils.isValidAddress(recipient, allowUnsafeAddresses), "Invalid recipient")
+	assert(quantity and quantity > 0 and utils.isInteger(quantity), "Invalid quantity. Must be integer greater than 0")
+	assert(recipient ~= msg.From, "Cannot transfer to self")
+	
+	-- Validate minimum transfer amount
+	local minTransfer = constants.ARDRIVEToMARDRIVE(100) -- 100 ARDRIVE minimum
+	assert(quantity >= minTransfer, "Transfer amount must be at least 100 ARDRIVE")
+	
+	-- Calculate or validate tip amount
+	local actualTipAmount
+	if tipAmount == nil then
+		actualTipAmount = tips.calculateSuggestedTip(quantity)
+	else
+		actualTipAmount = tonumber(tipAmount)
+		assert(actualTipAmount and actualTipAmount > 0 and utils.isInteger(actualTipAmount), "Invalid tip amount. Must be positive integer")
+	end
+	
+	-- Process the transfer with tip
+	local result = tips.processTransferWithTip({
+		from = msg.From,
+		recipient = recipient,
+		quantity = quantity,
+		tipAmount = actualTipAmount,
+		currentTimestamp = msg.Timestamp,
+		msgId = msg.Id,
+	})
+	
+	-- Log event fields
+	msg.ioEvent:addField("RecipientFormatted", recipient)
+	msg.ioEvent:addField("Transfer-Quantity", quantity)
+	msg.ioEvent:addField("Tip-Amount", result.tipAmount)
+	msg.ioEvent:addField("Tip-Recipient", result.tipRecipient)
+	msg.ioEvent:addField("Tip-Weight", result.tipWeight)
+	msg.ioEvent:addField("Total-Network-Weight", result.totalNetworkWeight)
+	
+	-- Send notifications
+	if not msg.Cast then
+		-- Debit notice to sender (total amount)
+		local debitNotice = {
+			Target = msg.From,
+			Action = "Debit-Notice",
+			Recipient = recipient,
+			Quantity = tostring(quantity),
+			["Tip-Amount"] = tostring(result.tipAmount),
+			["Tip-Recipient"] = result.tipRecipient,
+			["Total-Debit"] = tostring(quantity + result.tipAmount),
+			["Allow-Unsafe-Addresses"] = tostring(allowUnsafeAddresses),
+			Data = "You transferred " .. quantity .. " to " .. recipient .. " with tip of " .. result.tipAmount .. " to " .. result.tipRecipient,
+		}
+		
+		-- Credit notice to service provider
+		local creditNotice = {
+			Target = recipient,
+			Action = "Credit-Notice",
+			Sender = msg.From,
+			Quantity = tostring(quantity),
+			["Allow-Unsafe-Addresses"] = tostring(allowUnsafeAddresses),
+			Data = "You received " .. quantity .. " from " .. msg.From,
+		}
+		
+		-- Tip credit notice to tip recipient
+		local tipNotice = {
+			Target = result.tipRecipient,
+			Action = "Tip-Credit-Notice",
+			Sender = msg.From,
+			["Service-Provider"] = recipient,
+			["Tip-Amount"] = tostring(result.tipAmount),
+			["Tip-Weight"] = tostring(result.tipWeight),
+			["Total-Network-Weight"] = tostring(result.totalNetworkWeight),
+			Data = "You received a tip of " .. result.tipAmount .. " from " .. msg.From,
+		}
+		
+		-- Forward X-* tags to all notices
+		local didForwardTags = false
+		for tagName, tagValue in pairs(msg.Tags) do
+			if string.sub(tagName, 1, 2) == "X-" then
+				debitNotice[tagName] = tagValue
+				creditNotice[tagName] = tagValue
+				tipNotice[tagName] = tagValue
+				didForwardTags = true
+				msg.ioEvent:addField(tagName, tagValue)
+			end
+		end
+		if didForwardTags then
+			msg.ioEvent:addField("ForwardedTags", "true")
+		end
+		
+		-- Send all notices
+		Send(msg, debitNotice)
+		Send(msg, creditNotice)
+		Send(msg, tipNotice)
 	end
 end)
 

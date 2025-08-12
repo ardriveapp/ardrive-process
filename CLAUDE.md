@@ -34,9 +34,10 @@ busted spec/specific_spec.lua
 ### Core Process Structure
 The AO process implements a handler-based architecture where incoming messages trigger specific handlers:
 
-- **Token Operations**: Transfer, Mint, Burn handlers in `src/main.lua`
+- **Token Operations**: Transfer, TransferWithTip, Mint, Burn handlers in `src/main.lua`
 - **Balance Management**: Core logic in `src/balances.lua` handles debit/credit operations  
 - **Vaulting System**: Token locking functionality in `src/vaults.lua` for time-locked deposits
+- **Tips System**: Stake-weighted tip distribution in `src/tips.lua` with vault multipliers
 - **Event System**: Structured logging via `src/ardrive_event.lua` and `src/ao_event.lua`
 - **State Variables**: Global state (Balances, Vaults, TotalSupply, Name, Ticker) managed across handlers
 
@@ -50,7 +51,9 @@ The AO process implements a handler-based architecture where incoming messages t
 ### Vaulting Architecture
 - **Vault Operations**: CreateVault, VaultedTransfer, ExtendVault, IncreaseVault, RevokeVault
 - **Vault State**: Tracked in global `Vaults` table indexed by owner and vault ID
-- **Lock Constraints**: MIN_TOKEN_LOCK_TIME_MS to MAX_TOKEN_LOCK_TIME_MS enforced
+- **Lock Constraints**: 14 days minimum to 200 years maximum
+- **Minimum Vault Size**: 100 ARDRIVE to prevent state bloat
+- **Auto-Pruning**: Expired vaults automatically unlocked on every message
 - **Supply Tracking**: LastKnownLockedSupply and LastKnownCirculatingSupply for metrics
 
 ### Testing Architecture
@@ -59,6 +62,14 @@ The AO process implements a handler-based architecture where incoming messages t
 - **Test Helpers** (`/tests/helpers.mjs`): Shared utilities for loading AO process and assertions
 - Tests maintain memory state across operations to simulate real AO environment
 
+### Tips System Architecture (Transfer-With-Tip)
+- **Weighted Distribution**: Tips distributed to random stakers based on vault-weighted balances
+- **Vault Multipliers**: Linear scaling from 1.0x to 3.0x based on lock duration (14 days to 365+ days)
+- **Random Selection**: Uses crypto module for deterministic randomness
+- **Suggested Tips**: 15% of transfer amount
+- **Minimum Transfer**: 100 ARDRIVE required for Transfer-With-Tip only
+- **Batch Processing**: Processes up to 100 vaults per recipient for efficiency
+
 ### Key Implementation Details
 - All quantities must be integers (validated via `utils.isInteger`)
 - Addresses normalized via `utils.formatAddress` (lowercase for Arweave, checksummed for Ethereum)
@@ -66,6 +77,8 @@ The AO process implements a handler-based architecture where incoming messages t
 - X-* message tags are forwarded in notifications for custom metadata
 - Process owner has exclusive mint privileges
 - Timestamps tracked via LastKnownMessageTimestamp for ordering
+- Minimum vault size: 100 ARDRIVE (100 * 10^6 mARDRIVE)
+- Minimum for Transfer-With-Tip: 100 ARDRIVE (regular transfers have no minimum)
 
 ### Bundle System
 The `tools/bundle-aos.mjs` script combines all Lua sources into a single deployable file using `lua-bundler.mjs`. Module loading order matters - utilities and constants load first, then core logic (balances, vaults), finally main handlers.

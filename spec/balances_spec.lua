@@ -99,23 +99,21 @@ describe("balances", function()
 	describe("getPaginatedBalances", function()
 		it("should return paginated balances", function()
 			local returnedBalances = balances.getPaginatedBalances(nil, 10, "balance", "desc")
-			assert.are.same({
-				limit = 10,
-				sortBy = "balance",
-				sortOrder = "desc",
-				hasMore = false,
-				totalItems = 2,
-				items = {
-					{
-						address = ownerAddress,
-						balance = 100,
-					},
-					{
-						address = testAddress1,
-						balance = 100,
-					},
-				},
-			}, returnedBalances)
+			assert.are.equal(10, returnedBalances.limit)
+			assert.are.equal("balance", returnedBalances.sortBy)
+			assert.are.equal("desc", returnedBalances.sortOrder)
+			assert.is_false(returnedBalances.hasMore)
+			assert.are.equal(2, returnedBalances.totalItems)
+			assert.are.equal(2, #returnedBalances.items)
+			
+			-- Check that both addresses are present with correct balances
+			-- Order is undefined when balances are equal
+			local addresses = {}
+			for _, item in ipairs(returnedBalances.items) do
+				addresses[item.address] = item.balance
+			end
+			assert.are.equal(100, addresses[ownerAddress])
+			assert.are.equal(100, addresses[testAddress1])
 		end)
 	end)
 end)

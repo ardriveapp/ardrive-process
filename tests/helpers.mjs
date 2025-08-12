@@ -64,9 +64,9 @@ export const getBalances = async ({ memory, timestamp = STUB_TIMESTAMP }) => {
   const result = await handle({
     options: {
       Tags: [{ name: 'Action', value: 'Balances' }],
+      Timestamp: timestamp,
     },
-    timestamp,
-    memory,
+    mem: memory,
   });
 
   const balancesData = result.Messages?.[0]?.Data;
@@ -89,8 +89,8 @@ export const getBalance = async ({
         { name: 'Action', value: 'Balance' },
         { name: 'Address', value: address },
       ],
+      Timestamp: timestamp,
     },
-    timestamp,
     mem: memory,
   });
   // enforce the token.lua "spec" as defined by https://github.com/permaweb/aos/blob/15dd81ee596518e2f44521e973b8ad1ce3ee9945/blueprints/token.lua
